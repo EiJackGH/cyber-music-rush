@@ -4,6 +4,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.util.Log
+import com.example.data.TileType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -193,5 +194,46 @@ object SynthSoundPlayer {
                 delay(85)
             }
         }
+    }
+
+    fun playPowerUpActivation(tileType: TileType) {
+        if (!isSoundEnabled) return
+        CoroutineScope(Dispatchers.Default).launch {
+            if (tileType == TileType.SCORE_MULTIPLIER) {
+                // Bright golden shine sound: rapid rising arpeggio
+                val notes = doubleArrayOf(392.00, 493.88, 587.33, 783.99, 987.77, 1174.66)
+                for (note in notes) {
+                    playSynthTone(
+                        frequency = note,
+                        durationMs = 100,
+                        waveform = Waveform.FM_PLUCK,
+                        pitchBendEndFreq = note * 1.05,
+                        envelopeDecay = 4.0
+                    )
+                    delay(45)
+                }
+            } else {
+                // Blue sci-fi charging power up: pitch rise
+                playSynthTone(
+                    frequency = 220.0,
+                    durationMs = 450,
+                    waveform = Waveform.DETUNED_SAW,
+                    pitchBendEndFreq = 880.0,
+                    envelopeDecay = 1.0
+                )
+            }
+        }
+    }
+
+    fun playShieldAbsorb() {
+        if (!isSoundEnabled) return
+        // A quick high-pitch ping descending to a sci-fi zap
+        playSynthTone(
+            frequency = 987.77,
+            durationMs = 250,
+            waveform = Waveform.TRIANGLE,
+            pitchBendEndFreq = 220.00,
+            envelopeDecay = 2.0
+        )
     }
 }

@@ -47,6 +47,7 @@ import com.example.data.GameState
 import com.example.data.HighScore
 import com.example.data.TapParticle
 import com.example.data.ParticleType
+import com.example.data.TileType
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import com.example.viewmodel.CyberTilesViewModel
@@ -101,6 +102,9 @@ fun CyberGameScreen(
 
                     // Update combo timer
                     viewModel.updateComboTimer(deltaSeconds)
+
+                    // Update active power-ups
+                    viewModel.updatePowerUps(deltaSeconds)
 
                     // Update background grid scroll
                     viewModel.updateGridScroll(deltaSeconds)
@@ -163,6 +167,34 @@ fun CyberGameScreen(
                 gameState = gameState,
                 onPauseClick = { viewModel.pauseGame() }
             )
+
+            // Active Power-up Badges Row
+            if (gameState == GameState.PLAYING && (viewModel.activeScoreMultiplierTimeLeft > 0f || viewModel.activeInvincibilityTimeLeft > 0f)) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (viewModel.activeScoreMultiplierTimeLeft > 0f) {
+                        PowerUpActiveBadge(
+                            label = "2X POINTS",
+                            timeLeft = viewModel.activeScoreMultiplierTimeLeft,
+                            color = Color(0xFFFFD700),
+                            icon = Icons.Default.Bolt,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (viewModel.activeInvincibilityTimeLeft > 0f) {
+                        PowerUpActiveBadge(
+                            label = "SHIELD",
+                            timeLeft = viewModel.activeInvincibilityTimeLeft,
+                            color = Color(0xFF00FFFF),
+                            icon = Icons.Default.Shield,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -577,16 +609,16 @@ fun GameGrid(
                                                     )
                                                 ).border(2.dp, theme.tappedTile, RoundedCornerShape(16.dp))
                                             } else {
+                                                val (tileBackgroundColors, tileBorderColor) = when (row.tileType) {
+                                                    TileType.SCORE_MULTIPLIER -> listOf(Color(0xFFFFD700), Color(0xFFFF8C00)) to Color(0xFFFFD700)
+                                                    TileType.INVINCIBILITY -> listOf(Color(0xFF00E5FF), Color(0xFF0D47A1)) to Color(0xFF00E5FF)
+                                                    TileType.NORMAL -> listOf(theme.activeTile, theme.activeTile.copy(alpha = 0.7f)) to theme.accent
+                                                }
                                                 Modifier
                                                     .background(
-                                                        Brush.verticalGradient(
-                                                            colors = listOf(
-                                                                theme.activeTile,
-                                                                theme.activeTile.copy(alpha = 0.7f)
-                                                            )
-                                                        )
+                                                        Brush.verticalGradient(colors = tileBackgroundColors)
                                                     )
-                                                    .border(2.dp, theme.accent, RoundedCornerShape(16.dp))
+                                                    .border(3.dp, tileBorderColor, RoundedCornerShape(16.dp))
                                                     .clickable(
                                                         interactionSource = remember { MutableInteractionSource() },
                                                         indication = null
@@ -637,23 +669,62 @@ fun GameGrid(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isActiveColumn && !isTapped) {
-                                    // Make active tiles look beautiful & cyber
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(16.dp)
-                                                .height(4.dp)
-                                                .background(Color.White.copy(alpha = 0.6f), CircleShape)
-                                        )
-                                        if (row.id == 0L) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "START",
-                                                color = Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Black,
-                                                letterSpacing = 1.sp
-                                            )
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        when (row.tileType) {
+                                            TileType.SCORE_MULTIPLIER -> {
+                                                Icon(
+                                                    imageVector = Icons.Default.Bolt,
+                                                    contentDescription = "Double Points",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(28.dp)
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "2X POINTS",
+                                                    color = Color.White,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                            }
+                                            TileType.INVINCIBILITY -> {
+                                                Icon(
+                                                    imageVector = Icons.Default.Shield,
+                                                    contentDescription = "Shield",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(28.dp)
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "SHIELD",
+                                                    color = Color.White,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                            }
+                                            TileType.NORMAL -> {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(16.dp)
+                                                        .height(4.dp)
+                                                        .background(Color.White.copy(alpha = 0.6f), CircleShape)
+                                                )
+                                                if (row.id == 0L) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "START",
+                                                        color = Color.White,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        letterSpacing = 1.sp
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 } else if (isTapped) {
@@ -1685,6 +1756,53 @@ fun SynthwaveBackground(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun PowerUpActiveBadge(
+    label: String,
+    timeLeft: Float,
+    color: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.15f))
+            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = color,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = label,
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+            }
+            Text(
+                text = String.format("%.1fs", timeLeft),
+                color = color,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace
+            )
         }
     }
 }

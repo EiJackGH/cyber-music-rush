@@ -2,12 +2,19 @@ package com.example.data
 
 import androidx.compose.ui.graphics.Color
 
+enum class TileType {
+    NORMAL,
+    SCORE_MULTIPLIER,
+    INVINCIBILITY
+}
+
 data class TileRow(
     val id: Long,
     val activeColumn: Int,
     var isTapped: Boolean = false,
     var tappedColumn: Int = -1, // -1 means untapped, or 0-3 if tapped
-    var isMissed: Boolean = false
+    var isMissed: Boolean = false,
+    val tileType: TileType = TileType.NORMAL
 )
 
 enum class GameState {

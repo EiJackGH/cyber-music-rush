@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -55,6 +56,10 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
     var maxCombo by mutableStateOf(0)
     var comboMultiplier by mutableStateOf(1)
     var comboTimerProgress by mutableStateOf(1f) // 1f down to 0f
+
+    // Power-up States
+    var activeScoreMultiplierTimeLeft by mutableStateOf(0f)
+    var activeInvincibilityTimeLeft by mutableStateOf(0f)
     
     private val comboMaxDurationSeconds = 1.8f
     private var comboTimeRemaining = 0f
@@ -159,6 +164,8 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
         particles.clear()
         resetCombo()
         maxCombo = 0
+        activeScoreMultiplierTimeLeft = 0f
+        activeInvincibilityTimeLeft = 0f
         
         // Pre-fill initial rows so they are ready to show on screen
         for (i in 0L..15L) {
@@ -192,7 +199,22 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
             if (col == prevCol && Math.random() < 0.75) {
                 col = (col + 1) % 4
             }
-            TileRow(id = id, activeColumn = col)
+            // Occasional power-up tile (approx. 12% probability for rows after index 3)
+            val type = if (id > 3 && Math.random() < 0.12) {
+                if (Math.random() < 0.5) TileType.SCORE_MULTIPLIER else TileType.INVINCIBILITY
+            } else {
+                TileType.NORMAL
+            }
+            TileRow(id = id, activeColumn = col, tileType = type)
+        }
+    }
+
+    fun updatePowerUps(deltaTime: Float) {
+        if (activeScoreMultiplierTimeLeft > 0f) {
+            activeScoreMultiplierTimeLeft = (activeScoreMultiplierTimeLeft - deltaTime).coerceAtLeast(0f)
+        }
+        if (activeInvincibilityTimeLeft > 0f) {
+            activeInvincibilityTimeLeft = (activeInvincibilityTimeLeft - deltaTime).coerceAtLeast(0f)
         }
     }
 
@@ -229,7 +251,8 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
                 row0.tappedColumn = colIndex
                 isGameStarted = true
                 incrementCombo()
-                score += 10 * comboMultiplier
+                val pointsAdded = (10 * comboMultiplier) * (if (activeScoreMultiplierTimeLeft > 0f) 2 else 1)
+                score += pointsAdded
                 recalculateSpeed() // Recalculate dynamic difficulty speed with updated score
                 tilesTapped++
                 nextExpectedIndex = 1L
@@ -251,7 +274,8 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
                 row.tappedColumn = colIndex
                 
                 incrementCombo()
-                score += (10 + (currentSpeed / 100).toInt()) * comboMultiplier // Score scales with speed and combo multiplier!
+                val pointsAdded = ((10 + (currentSpeed / 100).toInt()) * comboMultiplier) * (if (activeScoreMultiplierTimeLeft > 0f) 2 else 1)
+                score += pointsAdded
                 tilesTapped++
                 
                 // Recalculate dynamic difficulty speed with updated score & combo
@@ -260,11 +284,25 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
                 // Next expected
                 nextExpectedIndex++
                 
-                // Play audio tone
-                SynthSoundPlayer.playTapSuccess(tilesTapped)
-                
-                // Spawn beautiful cyber particles!
-                spawnParticles(tapX, tapY)
+                // Check for power-up activation
+                when (row.tileType) {
+                    TileType.SCORE_MULTIPLIER -> {
+                        activeScoreMultiplierTimeLeft = 6.0f
+                        SynthSoundPlayer.playPowerUpActivation(TileType.SCORE_MULTIPLIER)
+                        spawnPowerUpParticles(tapX, tapY, TileType.SCORE_MULTIPLIER)
+                    }
+                    TileType.INVINCIBILITY -> {
+                        activeInvincibilityTimeLeft = 6.0f
+                        SynthSoundPlayer.playPowerUpActivation(TileType.INVINCIBILITY)
+                        spawnPowerUpParticles(tapX, tapY, TileType.INVINCIBILITY)
+                    }
+                    TileType.NORMAL -> {
+                        // Play standard audio tone
+                        SynthSoundPlayer.playTapSuccess(tilesTapped)
+                        // Spawn beautiful cyber particles!
+                        spawnParticles(tapX, tapY)
+                    }
+                }
                 
                 // Update active rows window
                 updateActiveRows()
@@ -352,6 +390,73 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
         }
     }
 
+    private fun spawnPowerUpParticles(x: Float, y: Float, type: TileType) {
+        val color = if (type == TileType.SCORE_MULTIPLIER) Color(0xFFFFD700) else Color(0xFF00FFFF)
+        
+        // Spawn 2 expanding rings
+        particles.add(
+            TapParticle(
+                id = particleIdCounter++,
+                x = x,
+                y = y,
+                vx = 0f,
+                vy = 0f,
+                color = color,
+                size = 16f,
+                maxLifetime = 0.5f,
+                type = ParticleType.SHOCKWAVE
+            )
+        )
+        particles.add(
+            TapParticle(
+                id = particleIdCounter++,
+                x = x,
+                y = y,
+                vx = 0f,
+                vy = 0f,
+                color = color.copy(alpha = 0.7f),
+                size = 8f,
+                maxLifetime = 0.7f,
+                type = ParticleType.SHOCKWAVE
+            )
+        )
+
+        // Spawn 30 high-velocity sparkling stars
+        for (i in 0 until 30) {
+            val angle = (Math.random() * 2 * Math.PI).toFloat()
+            val speed = (180f + Math.random() * 400f).toFloat()
+            val vx = Math.cos(angle.toDouble()).toFloat() * speed
+            val vy = Math.sin(angle.toDouble()).toFloat() * speed
+            val size = (10f + Math.random() * 15f).toFloat()
+            val lifetime = (0.4f + Math.random() * 0.5f).toFloat()
+            val initialRotation = (Math.random() * 360f).toFloat()
+            val rotationSpeed = (-360f + Math.random() * 720f).toFloat()
+
+            particles.add(
+                TapParticle(
+                    id = particleIdCounter++,
+                    x = x,
+                    y = y,
+                    vx = vx,
+                    vy = vy,
+                    color = color,
+                    size = size,
+                    maxLifetime = lifetime,
+                    type = ParticleType.GLOW_STAR,
+                    initialRotation = initialRotation,
+                    rotationSpeed = rotationSpeed
+                )
+            )
+        }
+    }
+
+    private fun spawnShieldAbsorbParticles(rowId: Long) {
+        val row = getOrCreateTileRow(rowId)
+        val estX = (row.activeColumn + 0.5f) * 180f
+        val estY = 750f
+        spawnPowerUpParticles(estX, estY, TileType.INVINCIBILITY)
+    }
+
     fun updateParticles(deltaTime: Float) {
         if (particles.isEmpty()) return
         val updatedList = particles.map { p ->
@@ -370,6 +475,26 @@ class CyberTilesViewModel(private val repository: ScoreRepository) : ViewModel()
     }
 
     fun triggerGameOver(failedRowId: Long? = null, failedColIndex: Int? = null) {
+        if (activeInvincibilityTimeLeft > 0f) {
+            if (failedRowId != null) {
+                val row = getOrCreateTileRow(failedRowId)
+                if (!row.isTapped) {
+                    row.isTapped = true
+                    row.tappedColumn = row.activeColumn
+                    
+                    // Absorb mistake
+                    SynthSoundPlayer.playShieldAbsorb()
+                    spawnShieldAbsorbParticles(failedRowId)
+                    
+                    if (failedRowId == nextExpectedIndex) {
+                        nextExpectedIndex++
+                    }
+                    updateActiveRows()
+                }
+            }
+            return
+        }
+
         gameState = GameState.GAME_OVER
         isGameStarted = false
         
